@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@mempool/mempool.js": "^2.3.0"
+  }
+}

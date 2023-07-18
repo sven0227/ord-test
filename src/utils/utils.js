@@ -6,6 +6,11 @@ const sleep = (timeout) => {
   })
 }
 
+const jsonParse = (val) => {
+  return JSON.parse(val.toString().replace(/\n/g, ''))
+}
+
 module.exports = {
-  sleep
+  sleep,
+  jsonParse
 }

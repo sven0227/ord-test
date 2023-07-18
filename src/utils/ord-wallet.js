@@ -5,6 +5,7 @@ const {
 const {
   NETWORK,
   WALLET_NAME,
+  TEMP_WALLET_NAME,
   CMD_PREFIX,
 } = require('./config.js')
 
@@ -46,15 +47,13 @@ const string2json = (string) => {
 function generateAddress(addressCount) {
   try {
     const addresses = []
-
     for (let index = 0; index < addressCount; index++) {
-      const execOut = "sdfsfewt333"//execSync(`ord --${NETWORK} --wallet ${WALLET_NAME} wallet receive`)
-      const address = "address" + Math.random() * 10//string2json(execOut.toString()).address
+      const execOut = execSync(`ord --${NETWORK} --wallet ${WALLET_NAME} wallet receive`)
+      const address = string2json(execOut.toString()).address
 
       addresses.push(address)
       console.log(address)
     }
-
     return addresses
   } catch (error) {
     console.error(error)
@@ -64,26 +63,24 @@ function generateAddress(addressCount) {
 function splitUtxo(addresses, amount) {
   try {
     const data = {}
-
     for (const address of addresses) {
       data[address] = amount / 10 ** 8
     }
-    console.log(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`);
-    // const execOut = execSync(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`)
-
-    // console.log(execOut.toString())
+    console.log(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`);
+    const execOut = execSync(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`)
+    console.log(execOut.toString())
+    return true
   } catch (error) {
+    console.error('failed sendmany')
     console.error(error)
+    return false
   }
 }
 
-const address_count = 3
-const amount = 100000
-
-const addresses = generateAddress(address_count)
-splitUtxo(addresses, amount)
 
 module.exports = {
   inscribeOrdinal,
   sendOrdinal,
+  generateAddress,
+  splitUtxo,
 }

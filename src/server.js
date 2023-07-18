@@ -19,13 +19,7 @@ const {
 	TESTNET,
 	NETWORK,
 	CMD_PREFIX,
-	VAULT_ADDRESS,
-	MONGODB_URI,
-	DB_NAME,
-	COLLECTION_NAME,
 	FRONT_SERVER,
-	STATIC_FEE,
-	DYNAMIC_FEE,
 	INSCRIPTION_PATH,
 } = require('./utils/config.js')
 
@@ -35,7 +29,6 @@ const {
 
 const { sleep, jsonParse } = require('./utils/utils.js')
 const { join } = require('path')
-const { error } = require('console')
 
 const ERROR_UNKNOWN = 'Unknown error'
 const ERROR_INVALID_PARAMTER = 'Invalid parameter'
@@ -100,7 +93,7 @@ app.post('/textinscribe', async function (req, res) {
 
 app.get('/test', async function (req, res) {
 	try {
-		console.log('/test...........');
+		// console.log('/test...........');
 		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
 		res.setHeader('Access-Control-Allow-Methods', 'GET')
 		const cradinals = getCardinals()
@@ -110,7 +103,7 @@ app.get('/test', async function (req, res) {
 			cardinals_count: global.cardinals_count,
 			app_status: 324
 		}
-		console.log('/test :>> ', appData);
+		// console.log('/test :>> ', appData);
 		res.send(JSON.stringify({ status: 'success', data: { ...appData } }))
 	}
 	catch (error) {

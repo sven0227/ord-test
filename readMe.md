@@ -1,3 +1,8 @@
+# addresses
+  temp address = 
+    Mainnet : ''
+    Testnet : ''
+
 # ord CLI
   ord --testnet wallet send --fee-rate 1 tb1qu9ud2zct3m4s6ljvwqdk5sumf4vpdqtv4zulpr 1000sats
 

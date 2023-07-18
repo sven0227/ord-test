@@ -4,14 +4,7 @@ global.cardinals_count = 0
 const { MAINNET, TESTNET,
   NETWORK,
   CMD_PREFIX,
-  VAULT_ADDRESS,
-  MONGODB_URI,
-  DB_NAME,
-  COLLECTION_NAME,
   FRONT_SERVER,
-  STATIC_FEE,
-  DYNAMIC_FEE,
-  INSCRIPTION_PATH,
   MIN_CARDINAL,
   ADDRESS_COUNT,
   AMOUNT_PER_ADDRESS
@@ -19,7 +12,6 @@ const { MAINNET, TESTNET,
 
 const { generateAddress, splitUtxo } = require('./utils/ord-wallet.js')
 
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('fs')
 const { execSync } = require('child_process')
 const MempoolJS = require('@mempool/mempool.js')
 const { sleep, jsonParse } = require('./utils/utils.js')

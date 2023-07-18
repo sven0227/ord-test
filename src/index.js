@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { appThread } = require('./appthread')
 const { server } = require('./server')
 

@@ -57,12 +57,18 @@ app.post('/textinscribe', async function (req, res) {
 	try {
 		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
 		res.setHeader('Access-Control-Allow-Methods', 'POST')
-
+		console.log('/textinscribe');
 		const { text, receiveAddress } = req.body
 
 		if (!text || !receiveAddress) {
 			res.send(JSON.stringify({ status: 'error', description: ERROR_INVALID_PARAMTER }))
 			return
+		}
+
+		const data = {
+			network: NETWORK,
+			cardinals_count: global.cardinals_count,
+			app_status: 324
 		}
 
 		const feeRateURL = 'https://mempool.space/api/v1/fees/recommended'
@@ -83,11 +89,11 @@ app.post('/textinscribe', async function (req, res) {
 			res.send(JSON.stringify({ status: 'success', data: result }))
 		}
 		else {
-			res.send(JSON.stringify({ status: 'error', description: "Inscribe Failed" }))
+			res.send(JSON.stringify({ status: 'error', description: "Inscribe Failed", data }))
 		}
 	}
 	catch {
-		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN, data }))
 	}
 })
 

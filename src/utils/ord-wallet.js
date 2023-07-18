@@ -71,7 +71,7 @@ function splitUtxo(addresses, amount) {
     // console.log(execOut.toString())
     return true
   } catch (error) {
-    console.error('  failed sendmany', error.message)
+    console.error('  failed sendmany')
     // console.error(error)
     return false
   }

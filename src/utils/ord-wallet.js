@@ -4,6 +4,7 @@ const {
 
 const {
   NETWORK,
+  MAINNET,
   WALLET_NAME,
   TEMP_WALLET_NAME,
   CMD_PREFIX,
@@ -48,7 +49,11 @@ function generateAddress(addressCount) {
   try {
     const addresses = []
     for (let index = 0; index < addressCount; index++) {
-      const execOut = execSync(`ord --${NETWORK} --wallet ${WALLET_NAME} wallet receive`)
+      const cmd =
+        NETWORK === MAINNET ?
+          `ord --wallet ${WALLET_NAME} wallet receive` :
+          `ord --${NETWORK} --wallet ${WALLET_NAME} wallet receive`
+      const execOut = execSync(cmd)
       const address = string2json(execOut.toString()).address
 
       addresses.push(address)

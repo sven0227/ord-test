@@ -10,7 +10,10 @@ const VAULT_ADDRESS =
   NETWORK === MAINNET ?
     'bc1pydgcpvd6mnayqr2j5gme52t955p06vnktx5eavggwj3meht3vqzsnquufz' :
     'tb1p6t6clw0geqhem86jjfclcd8z5zagd4w4d84gzqmn9rlgca59w03qk5qdpn'
-const TEMP_ADDRESS = 'tb1qu5kstadfsk5dvre77g8gcz9n2fvere2uz2mmnv'
+const TEMP_ADDRESS =
+  NETWORK === MAINNET ?
+    'bc1qmzpte6hj2z6mzmsmqzg3edds32w03y0ecmg28u' :
+    'tb1qskhwu8a088wmez90njdlfvarlpwmr87yv8psrh'
 
 
 const MONGODB_URI = 'mongodb://127.0.0.1:27017'

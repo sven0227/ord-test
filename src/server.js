@@ -34,6 +34,8 @@ const {
 } = require('./utils/ord-wallet.js')
 
 const { sleep, jsonParse } = require('./utils/utils.js')
+const { join } = require('path')
+const { error } = require('console')
 
 const ERROR_UNKNOWN = 'Unknown error'
 const ERROR_INVALID_PARAMTER = 'Invalid parameter'
@@ -62,8 +64,8 @@ app.post('/textinscribe', async function (req, res) {
 	try {
 		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
 		res.setHeader('Access-Control-Allow-Methods', 'POST')
-    
-		const {text, receiveAddress} = req.body
+
+		const { text, receiveAddress } = req.body
 
 		if (!text || !receiveAddress) {
 			res.send(JSON.stringify({ status: 'error', description: ERROR_INVALID_PARAMTER }))
@@ -72,7 +74,7 @@ app.post('/textinscribe', async function (req, res) {
 
 		const feeRateURL = 'https://mempool.space/api/v1/fees/recommended'
 		let feeRate = 1
-		if(NETWORK === MAINNET){
+		if (NETWORK === MAINNET) {
 			try {
 				const response = await fetch(feeRateURL);
 				const data = await response.json();
@@ -84,15 +86,27 @@ app.post('/textinscribe', async function (req, res) {
 		}
 
 		const result = await inscribeTextOrdinal(text, receiveAddress, feeRate)
-		if(result){
+		if (result) {
 			res.send(JSON.stringify({ status: 'success', data: result }))
 		}
 		else {
 			res.send(JSON.stringify({ status: 'error', description: "Inscribe Failed" }))
 		}
 	}
-	catch{
+	catch {
 		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+	}
+})
+
+app.post('/test', async function (req, res) {
+	try {
+		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
+		res.setHeader('Access-Control-Allow-Methods', 'POST')
+		console.log('global :>> ', global);
+		res.send(JSON.stringify({ status: 'success', data: global.cardinals_count }))
+	}
+	catch (error) {
+		res.send(JSON.stringify({ status: 'error', description: error }))
 	}
 })
 

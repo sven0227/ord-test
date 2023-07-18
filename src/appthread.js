@@ -1,3 +1,6 @@
+global.lastBlockHeight = 0
+global.cardinals_count = 0
+
 const { MAINNET, TESTNET,
   NETWORK,
   CMD_PREFIX,
@@ -28,7 +31,6 @@ const mempool = MempoolJS({
 })
 const bitcoin = mempool.bitcoin
 
-let lastBlockHeight = 0
 
 const runWalletIndex = () => {
   try {
@@ -61,7 +63,7 @@ const addCardinals = (blockHeight) => {
       const status = splitUtxo(addresses, AMOUNT_PER_ADDRESS)
       if (status) {
         console.log('  success adding cardinals', cardinals.length);
-        lastBlockHeight = blockHeight
+        global.lastBlockHeight = blockHeight
       }
       else {
         console.log('  failed adding cardinals');
@@ -69,15 +71,17 @@ const addCardinals = (blockHeight) => {
     } catch (error) {
       console.log('  failed adding cardinals', error);
     }
-
+  }
+  else if(cardinals != null && cardinals.length >= MIN_CARDINAL){
+    global.lastBlockHeight = blockHeight
   }
 }
 
 const main = async () => {
   try {
     const blockHeight = await bitcoin.blocks.getBlocksTipHeight()
-    if (blockHeight > lastBlockHeight) {
-      console.log('new blockHeight=', blockHeight);
+    if (blockHeight > global.lastBlockHeight) {
+      console.log('----new blockHeight-----------------------------', blockHeight);
       runWalletIndex() // ord wallet index
       addCardinals(blockHeight)
     }
@@ -86,17 +90,25 @@ const main = async () => {
   }
 }
 
+const init = () => {
+  console.log('initializing app...');
+  const cardinals = getCardinals()
+  global.cardinals_count = cardinals.length
+  console.log('cardinals_count=', global.cardinals_count);
+}
+
 async function appThread() {
+  init()
   while (true) {
     try {
-      console.log('-----start----');
-      console.time('main')
+      // console.log('-----start----');
+      // console.time('main')
       await main()
-      console.timeEnd('main')
-      console.log('zzz...');
+      // console.timeEnd('main')
+      // console.log('zzz...');
       await sleep(10000)
-      console.log('=====end==============================');
-      console.log('    ');
+      // console.log('=====end==============================');
+      // console.log('    ');
     } catch (error) {
 
     }

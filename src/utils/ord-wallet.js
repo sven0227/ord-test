@@ -8,7 +8,8 @@ const {
   WALLET_NAME,
   TEMP_WALLET_NAME,
   CMD_PREFIX,
-} = require('./config.js')
+} = require('./config.js');
+const { jsonParse } = require('./utils.js');
 
 ////////////////////////////////////////////////////////////////
 
@@ -67,12 +68,18 @@ function generateAddress(addressCount) {
 
 function splitUtxo(addresses, amount) {
   try {
+    const chain = NETWORK === 'mainnet' ? 'main' : 'test'
     const data = {}
     for (const address of addresses) {
       data[address] = amount / 10 ** 8
     }
+
     // console.log(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`);
-    const execOut = execSync(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`)
+    const balance = execSync(`bitcoin-cli -chain=${chain} -rpcwallet=temp getbalance`)
+    console.log('temp wallet balance=', jsonParse(balance) * 1e8);
+    const cmd = `bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}' '' '["bc1pnz95rrkg9j64p05vct2lf5hvhmke6d3apkwfsjly28xy6ermystqm7hk4k"]' true '' 'UNSET' 9 true`
+    console.log('cmd :>> ', cmd);
+    const execOut = execSync(`bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}' `)
     // console.log(execOut.toString())
     return true
   } catch (error) {

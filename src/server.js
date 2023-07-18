@@ -98,7 +98,7 @@ app.get('/test', async function (req, res) {
 		res.setHeader('Access-Control-Allow-Methods', 'GET')
 		const cradinals = getCardinals()
 		const appData = {
-			newwork: NETWORK,
+			network: NETWORK,
 			cardinals_now: cradinals ? cradinals.length : 'error',
 			cardinals_count: global.cardinals_count,
 			app_status: 324

@@ -24,3 +24,27 @@
 # sample env
 NETWORK=testnet
 TEMP_WALLET_NAME=temp
+
+# wallet create
+root@135-181-213-142 /ord-test # ord wallet create
+{
+  "mnemonic": "budget glove swift pulp bracket kite crane onion series trouble ozone vote",
+  "passphrase": ""
+}
+
+root@135-181-213-142 /ord-test # ord --wallet temp wallet create
+{
+  "mnemonic": "copy visit crack egg jeans setup certain anger canoe dilemma behave weekend",
+  "passphrase": ""
+}
+
+root@135-181-213-142 /ord-test # ord --wallet temp wallet receive
+{
+  "address": "bc1pnz95rrkg9j64p05vct2lf5hvhmke6d3apkwfsjly28xy6ermystqm7hk4k"
+}
+
+root@135-181-213-142 /ord-test # ord --testnet --wallet temp wallet create
+{
+  "mnemonic": "lumber humor family math brass laugh space shield addict hotel ethics brown",
+  "passphrase": ""
+}

@@ -10,7 +10,7 @@ const CMD_PREFIX = ''
 const FRONT_SERVER = '*'
 
 // APP setting
-const MIN_CARDINAL = NETWORK === TESTNET ?
+const MIN_CARDINAL = NETWORK === MAINNET ?
   process.env.MIN_CARDINAL_MAINNET :
   process.env.MIN_CARDINAL_TESTNET
 const ADDRESS_COUNT = MIN_CARDINAL

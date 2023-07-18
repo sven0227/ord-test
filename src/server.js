@@ -1,7 +1,7 @@
 const express = require('express')
 const parser = require('body-parser')
 const cors = require('cors')
-const https = require('https')
+const { getCardinals } = require('./appthread')
 
 const {
 	existsSync,
@@ -98,12 +98,20 @@ app.post('/textinscribe', async function (req, res) {
 	}
 })
 
-app.post('/test', async function (req, res) {
+app.get('/test', async function (req, res) {
 	try {
+		console.log('/test...........');
 		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
-		res.setHeader('Access-Control-Allow-Methods', 'POST')
-		console.log('global :>> ', global);
-		res.send(JSON.stringify({ status: 'success', data: global.cardinals_count }))
+		res.setHeader('Access-Control-Allow-Methods', 'GET')
+		const cradinals = getCardinals()
+		const appData = {
+			newwork: NETWORK,
+			cardinals_now: cradinals ? cradinals.length : 'error',
+			cardinals_count: global.cardinals_count,
+			app_status: 324
+		}
+		console.log('/test :>> ', appData);
+		res.send(JSON.stringify({ status: 'success', data: { ...appData } }))
 	}
 	catch (error) {
 		res.send(JSON.stringify({ status: 'error', description: error }))

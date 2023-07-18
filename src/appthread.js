@@ -136,5 +136,6 @@ async function test() {
 }
 
 module.exports = {
-  appThread
+  appThread,
+  getCardinals
 }

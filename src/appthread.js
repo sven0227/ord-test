@@ -76,140 +76,146 @@ const init = () => {
 
 const orderThread = async () => {
   while (true) {
-    await sleep(ORDER_PERIOD)
-    const orders = await global.orderCollection.find({ order_status: { $lt: ORDER_STATUS_FAILED } }).toArray()
-    const toInscribe = orders.filter(order => order.order_status == ORDER_STATUS_TRANSACTION_CONFIRMED).length
-    const feeRate = await getFeeRate()
-    console.log('=====================')
-    console.log('=====================')
-    console.log('=== NEW ORDER =', toInscribe, orders.length)
-    console.log('=====================')
-    console.log('=====================')
-    if (global.isAddingCardinal) {
-      orderLog.info('Waiting for cardinals added...')
-      continue
-    }
-    if (orders.length > 0) {
-      orderLog.info('OrderThread Start, toInscribe, total, feerate', toInscribe, orders.length, feeRate)
-    } else {
-      orderLog.info('No orders..., waiting for new orders')
-      continue
-    }
-    let index = 0
-    if (global.cardinals_count == 0) {
-      orderLog.error('No cardinals..., waiting for cardinals')
-      continue
-    }
-    for (const order of orders) {
-      index++
-      try {
-        switch (order.order_status) {
-          case ORDER_STATUS_ORDERED:
-            let tx = await getTransaction(order.txid)
+    try {
+      await sleep(ORDER_PERIOD)
+      const orders = await global.orderCollection.find({ order_status: { $lt: ORDER_STATUS_FAILED } }).toArray()
+      const toInscribe = orders.filter(order => order.order_status == ORDER_STATUS_TRANSACTION_CONFIRMED).length
+      console.log('=====================')
+      console.log('=====================')
+      console.log('=== NEW ORDER =', toInscribe, orders.length)
+      console.log('=====================')
+      console.log('=====================')
+      if (global.isAddingCardinal) {
+        orderLog.info('Waiting for cardinals added...')
+        continue
+      }
+      if (orders.length > 0) {
+        orderLog.info('OrderThread Start, toInscribe, total', toInscribe, orders.length)
+      } else {
+        orderLog.info('No orders..., waiting for new orders')
+        continue
+      }
+      let index = 0
+      const feeRate = await getFeeRate()
+      console.log('feeRate', feeRate)
+      if (global.cardinals_count == 0) {
+        orderLog.error('No cardinals..., waiting for cardinals')
+        continue
+      }
+      for (const order of orders) {
+        index++
+        try {
+          switch (order.order_status) {
+            case ORDER_STATUS_ORDERED:
+              let tx = await getTransaction(order.txid)
 
-            if (!tx) {
-              order.order_status = ORDER_STATUS_FAILED
-              order.description = 'Transaction not exist'
-              break
-            } else if (!tx.status.confirmed) {
-              break
-            }
-
-            let validSenderAddress = true
-
-            for (const vin of tx.vin) {
-              if (vin.prevout.scriptpubkey_address !== order.btc_sender_address) {
-                validSenderAddress = false
+              if (!tx) {
+                order.order_status = ORDER_STATUS_FAILED
+                order.description = 'Transaction not exist'
+                break
+              } else if (!tx.status.confirmed) {
                 break
               }
-            }
 
-            if (!validSenderAddress) {
-              order.order_status = ORDER_STATUS_FAILED
-              order.description = 'Invalid sender address'
-              break
-            }
+              let validSenderAddress = true
 
-            let btcBalance = 0
-            let validReceiverAddress = false
-
-            for (const vout of tx.vout) {
-              if (vout.scriptpubkey_address === VAULT_ADDRESS) {
-                btcBalance += vout.value
-                validReceiverAddress = true
+              for (const vin of tx.vin) {
+                if (vin.prevout.scriptpubkey_address !== order.btc_sender_address) {
+                  validSenderAddress = false
+                  break
+                }
               }
-            }
 
-            if (!validReceiverAddress) {
-              order.order_status = ORDER_STATUS_FAILED
-              order.description = 'Invalid receiver address'
+              if (!validSenderAddress) {
+                order.order_status = ORDER_STATUS_FAILED
+                order.description = 'Invalid sender address'
+                break
+              }
+
+              let btcBalance = 0
+              let validReceiverAddress = false
+
+              for (const vout of tx.vout) {
+                if (vout.scriptpubkey_address === VAULT_ADDRESS) {
+                  btcBalance += vout.value
+                  validReceiverAddress = true
+                }
+              }
+
+              if (!validReceiverAddress) {
+                order.order_status = ORDER_STATUS_FAILED
+                order.description = 'Invalid receiver address'
+                break
+              }
+
+              order.btc_balance = btcBalance
+              order.spent_fee = 0
+
+              if (order.btc_balance < STATIC_FEE + DYNAMIC_FEE * order.fee_rate) {
+                order.order_status = ORDER_STATUS_FAILED
+                order.description = 'Insufficient BTC balance'
+                break
+              }
+
+              order.order_status = ORDER_STATUS_TRANSACTION_CONFIRMED
+              order.description = 'Transaction confirmed'
+            case ORDER_STATUS_TRANSACTION_CONFIRMED:
+              orderLog.debug('Inscribing ...', index)
+              orderLog.debug('cardinals_count', global.cardinals_count)
+              const response = await inscribeTextOrdinal(order.text, order.receiveAddress, feeRate)
+              if (response.status == FAILED) {
+                // order.order_status = ORDER_STATUS_FAILED
+                orderLog.error('Inscribe failed:', response.error)
+                order.description = response.error
+                break
+              }
+
+              order.ordinal = response.data
+              order.feeRate = feeRate
+              order.order_status = ORDER_STATUS_ORDINAL_INSCRIBED
+              order.description = 'Ordinal inscribed'
+              orderLog.fatal('Inscribing success...txid,reveal', order.txid, order.ordinal.reveal)
+              if (global.cardinals_count > 0) global.cardinals_count -= 1
               break
-            }
+            case ORDER_STATUS_ORDINAL_INSCRIBED:
+              if (!global.new_block_detected) continue
+              if (toInscribe > 0) continue
+              if (global.new_order_detected) continue
+              orderLog.debug('Checking if inscription confimed', index)
+              const ordinalTx = await getTransaction(order.ordinal.reveal)
+              if (!ordinalTx) {
+                order.order_status = ORDER_STATUS_FAILED
+                order.description = 'Inscribe ordinal transaction not exist'
+                break
+              } else if (!ordinalTx.status.confirmed) {
+                break
+              }
+              order.spent_fee = 0
+              order.spent_fee += order.ordinal.fees //token_transfer is not defined!!
+              order.spent_fee += await getInscriptionSats(order.ordinal.inscription)
 
-            order.btc_balance = btcBalance
-            order.spent_fee = 0
-
-            if (order.btc_balance < STATIC_FEE + DYNAMIC_FEE * order.fee_rate) {
-              order.order_status = ORDER_STATUS_FAILED
-              order.description = 'Insufficient BTC balance'
+              order.order_status = ORDER_STATUS_CONFIRMED
+              order.description = 'Confirmed'
+              orderLog.fatal('inscription confimed', order.txid)
               break
-            }
+          }
 
-            order.order_status = ORDER_STATUS_TRANSACTION_CONFIRMED
-            order.description = 'Transaction confirmed'
-          case ORDER_STATUS_TRANSACTION_CONFIRMED:
-            orderLog.debug('Inscribing ...', index)
-            orderLog.debug('cardinals_count', global.cardinals_count)
-            const response = await inscribeTextOrdinal(order.text, order.receiveAddress, feeRate)
-            if (response.status == FAILED) {
-              // order.order_status = ORDER_STATUS_FAILED
-              orderLog.error('Inscribe failed:', response.error)
-              order.description = response.error
-              break
-            }
-
-            order.ordinal = response.data
-
-            order.order_status = ORDER_STATUS_ORDINAL_INSCRIBED
-            order.description = 'Ordinal inscribed'
-            orderLog.fatal('Inscribing success...txid,reveal', order.txid, order.ordinal.reveal)
-            if (global.cardinals_count > 0) global.cardinals_count -= 1
-            break
-          case ORDER_STATUS_ORDINAL_INSCRIBED:
-            if (!global.new_block_detected) continue
-            if (toInscribe > 0) continue
-            if (global.new_order_detected) continue
-            orderLog.debug('Checking if inscription confimed', index)
-            const ordinalTx = await getTransaction(order.ordinal.reveal)
-            if (!ordinalTx) {
-              order.order_status = ORDER_STATUS_FAILED
-              order.description = 'Inscribe ordinal transaction not exist'
-              break
-            } else if (!ordinalTx.status.confirmed) {
-              break
-            }
-            order.spent_fee = 0
-            order.spent_fee += order.ordinal.fees //token_transfer is not defined!!
-            order.spent_fee += await getInscriptionSats(order.ordinal.inscription)
-
-            order.order_status = ORDER_STATUS_CONFIRMED
-            order.description = 'Confirmed'
-            orderLog.fatal('inscription confimed', order.txid)
-            break
+          // order.remain_btc_balance = order.btc_balance - order.spent_fee
+          await orderCollection.updateOne({ _id: order._id }, { $set: order })
+        } catch (error) {
+          order.status = ORDER_STATUS_FAILED
+          order.description = error.toString()
+          orderLog.fatal('UNKOWN FATAL ERROR ***')
+          await orderCollection.updateOne({ _id: order._id }, { $set: order })
+          console.error(error)
         }
-
-        // order.remain_btc_balance = order.btc_balance - order.spent_fee
-        await orderCollection.updateOne({ _id: order._id }, { $set: order })
-      } catch (error) {
-        order.status = ORDER_STATUS_FAILED
-        order.description = error.toString()
-        orderLog.fatal('UNKOWN FATAL ERROR ***')
-        await orderCollection.updateOne({ _id: order._id }, { $set: order })
-        console.error(error)
       }
+      global.new_block_detected = false
+      global.new_order_detected = false
+      console.log('orderthread end...');
+    } catch (error) {
+      orderLog.fatal('OrderThread unexpected error', error)
     }
-    global.new_block_detected = false
-    global.new_order_detected = false
   }
 }
 
@@ -239,7 +245,7 @@ const cardinalThread = async () => {
         logger.debug('Waiting for new block ...')
       }
     } catch (error) {
-      logger.error('Orderthread unexpect error', error)
+      logger.error('Cardinals thread unexpected error', error)
     }
   }
 }

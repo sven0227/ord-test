@@ -1,12 +1,6 @@
-const {
-  MongoClient
-} = require('mongodb')
+const { MongoClient } = require('mongodb')
 
-const {
-  MONGODB_URI,
-  DB_NAME,
-  COLLECTION_NAME,
-} = require('./utils/config')
+const { MONGODB_URI, DB_NAME, COLLECTION_NAME } = require('./utils/config')
 
 const {
   ORDER_STATUS_ORDERED,
@@ -25,22 +19,24 @@ const mongoClient = new MongoClient(MONGODB_URI)
 let orderCollection //= mongodb.collection(COLLECTION_NAME)
 
 async function dbInit() {
-  console.log('connectingdb...');
+  console.log('connectingdb...')
   await mongoClient.connect()
   global.mongodb = mongoClient.db(DB_NAME)
   global.orderCollection = global.mongodb.collection(COLLECTION_NAME)
-  console.log('connected...');
+  console.log('connected...')
 }
 
 async function insertOrder(order) {
   try {
-    order.timestamp = Date.now()
-    const result = await global.orderCollection.insertOne(order)
-    order._id = result.insertedId
+    const { txid, receiveAddress, text} = order
+    const _order = { txid, receiveAddress, text}
+    _order.timestamp = Date.now()
+    const result = await global.orderCollection.insertOne(_order)
+    _order._id = result.insertedId
 
-    order.order_status = ORDER_STATUS_TRANSACTION_CONFIRMED
-    order.description = 'TX Confirmed'
-    await global.orderCollection.updateOne({ _id: order._id }, { $set: order })
+    _order.order_status = ORDER_STATUS_TRANSACTION_CONFIRMED
+    _order.description = 'TX Confirmed'
+    await global.orderCollection.updateOne({ _id: _order._id }, { $set: _order })
 
     return true
   } catch (error) {
@@ -49,31 +45,28 @@ async function insertOrder(order) {
 }
 
 async function checkOrder(order) {
-	if (!order.txid
-		|| !order.feeRate
-		|| !order.receiveAddress
-		|| !order.text) {
-		order.description = ERROR_INVALID_PARAMTER
-		return
-	}
+  if (!order.txid || !order.receiveAddress || !order.text) {
+    order.description = ERROR_INVALID_PARAMTER
+    return
+  }
 
-	// if (!/^[a-fA-F0-9]{64}$/.test(order.txid)) {
-	// 	order.description = ERROR_INVALID_TXID
-	// 	return
-	// }
-	const txs = await global.orderCollection.find({ txid: order.txid }).toArray()
+  // if (!/^[a-fA-F0-9]{64}$/.test(order.txid)) {
+  // 	order.description = ERROR_INVALID_TXID
+  // 	return
+  // }
+  const txs = await global.orderCollection.find({ txid: order.txid }).toArray()
 
-	if (txs.length) {
-		// order.description = ERROR_DUPLICATED_TXID
-		// return
-	}
+  if (txs.length) {
+    // order.description = ERROR_DUPLICATED_TXID
+    // return
+  }
 
-	return true
+  return true
 }
 
-dbInit() 
+dbInit()
 
 module.exports = {
   checkOrder,
-  insertOrder
+  insertOrder,
 }

@@ -18,7 +18,7 @@ const AMOUNT_PER_ADDRESS =
 const INSCRIPTION_PATH = 'inscription'
 
 //mongodb setting
-const MONGODB_URI = 'mongodb://127.0.0.1:3306'
+const MONGODB_URI = `mongodb://${process.env.MONGODB_USERNAME}:${process.env.MONGODB_PASSWORD}@127.0.0.1:3306/?authSource=admin&readPreference=primary&appname=MongoDB%20Compass&ssl=false`
 const DB_NAME = 'ordinals'
 const COLLECTION_NAME = 'order'
 

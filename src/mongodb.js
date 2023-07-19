@@ -64,8 +64,8 @@ async function checkOrder(order) {
 	const txs = await global.orderCollection.find({ txid: order.txid }).toArray()
 
 	if (txs.length) {
-		order.description = ERROR_DUPLICATED_TXID
-		return
+		// order.description = ERROR_DUPLICATED_TXID
+		// return
 	}
 
 	return true

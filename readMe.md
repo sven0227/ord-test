@@ -31,20 +31,25 @@ root@135-181-213-142 /ord-test # ord wallet create
   "mnemonic": "budget glove swift pulp bracket kite crane onion series trouble ozone vote",
   "passphrase": ""
 }
-
+## ord wallet
 root@135-181-213-142 /ord-test # ord --wallet temp wallet create
 {
   "mnemonic": "copy visit crack egg jeans setup certain anger canoe dilemma behave weekend",
   "passphrase": ""
 }
-
+## temp wallet
 root@135-181-213-142 /ord-test # ord --wallet temp wallet receive
 {
   "address": "bc1pnz95rrkg9j64p05vct2lf5hvhmke6d3apkwfsjly28xy6ermystqm7hk4k"
 }
-
+## temp wallet testnet create
 root@135-181-213-142 /ord-test # ord --testnet --wallet temp wallet create
 {
   "mnemonic": "lumber humor family math brass laugh space shield addict hotel ethics brown",
   "passphrase": ""
+}
+## temp wallet testnet address
+root@135-181-213-142 /ord-test # ord --testnet --wallet temp wallet receive
+{
+  "address": "tb1pxxfcu0puxfqnf6aart0ve3gsj93fy6lumcy5uyc7ycvr2029gces4sgx80"
 }

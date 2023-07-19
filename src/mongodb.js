@@ -39,7 +39,7 @@ async function insertOrder(order) {
     order._id = result.insertedId
 
     order.order_status = ORDER_STATUS_TRANSACTION_CONFIRMED
-    order.description = 'Confirmed'
+    order.description = 'TX Confirmed'
     await global.orderCollection.updateOne({ _id: order._id }, { $set: order })
 
     return true
@@ -50,7 +50,7 @@ async function insertOrder(order) {
 
 async function checkOrder(order) {
 	if (!order.txid
-		|| !order.fee_rate
+		|| !order.feeRate
 		|| !order.receiveAddress
 		|| !order.text) {
 		order.description = ERROR_INVALID_PARAMTER

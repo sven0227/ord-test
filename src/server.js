@@ -3,12 +3,6 @@ const parser = require('body-parser')
 const cors = require('cors')
 const { getCardinals } = require('./appthread')
 
-
-
-const {
-	execSync
-} = require('child_process')
-
 const {
 	MAINNET,
 	TESTNET,
@@ -18,7 +12,9 @@ const {
 	INSCRIPTION_PATH,
 } = require('./utils/config.js')
 
-
+const log4js = require('log4js');
+const logger = log4js.getLogger('API-' + NETWORK);
+logger.level = 'debug'; // Set log level to debug
 
 const { sleep, jsonParse } = require('./utils/utils.js')
 const { join } = require('path')
@@ -42,6 +38,7 @@ const {
 	checkOrder,
 	insertOrder
 } = require('./mongodb')
+const { SUCCESS, FAILED } = require('./utils/defines')
 
 
 
@@ -53,7 +50,7 @@ app.post('/textinscribe', async function (req, res) {
 		const { text, receiveAddress } = req.body
 
 		if (!text || !receiveAddress) {
-			res.send(JSON.stringify({ status: 'error', description: ERROR_INVALID_PARAMTER }))
+			res.send(JSON.stringify({ status: FAILED, description: ERROR_INVALID_PARAMTER }))
 			return
 		}
 
@@ -71,21 +68,21 @@ app.post('/textinscribe', async function (req, res) {
 				const data = await response.json();
 				feeRate = data.halfHourFee
 			} catch (error) {
-				res.send(JSON.stringify({ status: 'error', description: 'FeeRate fetch error' }))
+				res.send(JSON.stringify({ status: FAILED, description: 'FeeRate fetch error' }))
 				return
 			}
 		}
 
 		const result = await inscribeTextOrdinal(text, receiveAddress, feeRate)
 		if (result) {
-			res.send(JSON.stringify({ status: 'success', data: result }))
+			res.send(JSON.stringify({ status: SUCCESS, data: result }))
 		}
 		else {
-			res.send(JSON.stringify({ status: 'error', description: "Inscribe Failed", data }))
+			res.send(JSON.stringify({ status: FAILED, description: "Inscribe Failed", data }))
 		}
 	}
 	catch {
-		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN, data }))
+		res.send(JSON.stringify({ status: FAILED, description: ERROR_UNKNOWN, data }))
 	}
 })
 
@@ -97,20 +94,21 @@ app.post('/inscribe/text', async function (req, res) {
 		const order = req.body
 		if (!(await checkOrder(order))
 		) {
-			res.send(JSON.stringify({ status: 'error', description: order.description }))
+			res.send(JSON.stringify({ status: FAILED, description: order.description }))
 			return
 		}
 
 		order.ordinal_type = ORDINAL_TYPE_TEXT
 
 		if (await insertOrder(order)) {
-			res.send(JSON.stringify({ status: 'success', data: order }))
+			res.send(JSON.stringify({ status: SUCCESS, data: order }))
 		} else {
-			res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+			res.send(JSON.stringify({ status: FAILED, description: ERROR_UNKNOWN }))
 		}
+		logger.fatal('New order added...')
 	} catch (error) {
 		console.error(error)
-		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+		res.send(JSON.stringify({ status: FAILED, description: ERROR_UNKNOWN }))
 	}
 })
 
@@ -122,15 +120,15 @@ app.get('/test', async function (req, res) {
 		const cradinals = getCardinals()
 		const appData = {
 			network: NETWORK,
-			cardinals_now: cradinals ? cradinals.length : 'error',
+			cardinals_now: cradinals ? cradinals.length : FAILED,
 			cardinals_count: global.cardinals_count,
 			app_status: 324
 		}
 		// console.log('/test :>> ', appData);
-		res.send(JSON.stringify({ status: 'success', data: { ...appData } }))
+		res.send(JSON.stringify({ status: SUCCESS, data: { ...appData } }))
 	}
 	catch (error) {
-		res.send(JSON.stringify({ status: 'error', description: error }))
+		res.send(JSON.stringify({ status: FAILED, description: error }))
 	}
 })
 
@@ -139,10 +137,10 @@ app.get('/getvaultaddress', async function (req, res) {
 		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
 		res.setHeader('Access-Control-Allow-Methods', 'GET')
 
-		res.send(JSON.stringify({ status: 'success', data: VAULT_ADDRESS }))
+		res.send(JSON.stringify({ status: SUCCESS, data: VAULT_ADDRESS }))
 	} catch (error) {
 		console.error(error)
-		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+		res.send(JSON.stringify({ status: FAILED, description: ERROR_UNKNOWN }))
 	}
 })
 
@@ -153,10 +151,10 @@ app.post('/getorder', async function (req, res) {
 
 		const orders = await orderCollection.find(req.body).toArray()
 
-		res.send(JSON.stringify({ status: 'success', data: orders }))
+		res.send(JSON.stringify({ status: SUCCESS, data: orders }))
 	} catch (error) {
 		console.error(error)
-		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+		res.send(JSON.stringify({ status: FAILED, description: ERROR_UNKNOWN }))
 	}
 })
 

@@ -1,27 +1,33 @@
-global.lastBlockHeight = 0
-global.cardinals_count = 0
-const WAIT_TIME = 60
-
 const {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} = require('fs')
-
-const {
-  inscribeOrdinal,
-} = require('./utils/ord-wallet.js')
-
-const { MAINNET, TESTNET,
+  MAINNET,
+  TESTNET,
   NETWORK,
   CMD_PREFIX,
   FRONT_SERVER,
   MIN_CARDINAL,
   ADDRESS_COUNT,
   AMOUNT_PER_ADDRESS,
-  INSCRIPTION_PATH
+  INSCRIPTION_PATH,
 } = require('./utils/config.js')
+
+global.lastBlockHeight = 0
+global.cardinals_count = 0
+global.isAddingCardinal = false
+const WAIT_TIME = 60
+
+const log4js = require('log4js')
+const logger = log4js.getLogger('cardinal')
+const orderLog = log4js.getLogger('order')
+logger.level = 'debug' // Set log level to debug
+orderLog.level = 'debug' // Set log level to debug
+log4js.configure({
+  appenders: { console: { type: 'console', filename: 'cardinal.log' }, file: { type: 'file', filename: 'order.log' } },
+  categories: { default: { appenders: ['console', 'file'], level: 'debug' } },
+})
+
+const { writeFileSync } = require('fs')
+
+const { inscribeOrdinal } = require('./utils/ord-wallet.js')
 
 const {
   ORDER_STATUS_ORDERED,
@@ -33,6 +39,8 @@ const {
   ERROR_INVALID_PARAMTER,
   ERROR_INVALID_TXID,
   ERROR_DUPLICATED_TXID,
+  SUCCESS,
+  FAILED,
 } = require('./utils/defines.js')
 
 const { generateAddress, splitUtxo } = require('./utils/ord-wallet.js')
@@ -48,7 +56,175 @@ const mempool = MempoolJS({
 })
 const bitcoin = mempool.bitcoin
 
-const getTransaction = async (txid) => {
+async function appThread() {
+  await sleep(1000)
+  init()
+  // orderThread()
+  cardinalThread()
+}
+
+const init = () => {
+  console.log('initializing app...')
+  const { status, data: cardinals, error } = getCardinals()
+  global.cardinals_count = cardinals.length
+  console.log('cardinals_count=', global.cardinals_count)
+}
+
+const orderThread = async () => {
+  while (true) {
+    await sleep(3000)
+    const orders = await global.orderCollection.find({ order_status: { $lt: ORDER_STATUS_FAILED } }).toArray()
+    console.log('=====================')
+    console.log('=====================')
+    console.log('=== NEW ORDER =', orders.length)
+    console.log('=====================')
+    console.log('=====================')
+    if (global.isAddingCardinal) {
+      orderLog.info('Waiting for cardinals added')
+    }
+    if (orders.length > 0) orderLog.info('Order_count=', orders.length)
+    else {
+      orderLog.info('No orders..., waiting for new orders')
+      continue
+    }
+    let index = 0
+    if (global.cardinals_count == 0) {
+      orderLog.error('No cardinals..., waiting for cardinals')
+      continue
+    }
+    for (const order of orders) {
+      index++
+      try {
+        switch (order.order_status) {
+          case ORDER_STATUS_ORDERED:
+            let tx = await getTransaction(order.txid)
+
+            if (!tx) {
+              order.order_status = ORDER_STATUS_FAILED
+              order.description = 'Transaction not exist'
+              break
+            } else if (!tx.status.confirmed) {
+              break
+            }
+
+            let validSenderAddress = true
+
+            for (const vin of tx.vin) {
+              if (vin.prevout.scriptpubkey_address !== order.btc_sender_address) {
+                validSenderAddress = false
+                break
+              }
+            }
+
+            if (!validSenderAddress) {
+              order.order_status = ORDER_STATUS_FAILED
+              order.description = 'Invalid sender address'
+              break
+            }
+
+            let btcBalance = 0
+            let validReceiverAddress = false
+
+            for (const vout of tx.vout) {
+              if (vout.scriptpubkey_address === VAULT_ADDRESS) {
+                btcBalance += vout.value
+                validReceiverAddress = true
+              }
+            }
+
+            if (!validReceiverAddress) {
+              order.order_status = ORDER_STATUS_FAILED
+              order.description = 'Invalid receiver address'
+              break
+            }
+
+            order.btc_balance = btcBalance
+            order.spent_fee = 0
+
+            if (order.btc_balance < STATIC_FEE + DYNAMIC_FEE * order.fee_rate) {
+              order.order_status = ORDER_STATUS_FAILED
+              order.description = 'Insufficient BTC balance'
+              break
+            }
+
+            order.order_status = ORDER_STATUS_TRANSACTION_CONFIRMED
+            order.description = 'Transaction confirmed'
+          case ORDER_STATUS_TRANSACTION_CONFIRMED:
+            orderLog.debug('Inscribing ...', index)
+            orderLog.debug('cardinals_count', global.cardinals_count)
+            const response = await inscribeTextOrdinal(order.text, order.receiveAddress, order.feeRate)
+            if (response.status == FAILED) {
+              // order.order_status = ORDER_STATUS_FAILED
+              orderLog.error('Inscribe failed:', response.error)
+              order.description = response.error
+              break
+            }
+
+            order.ordinal = response.data
+
+            order.order_status = ORDER_STATUS_ORDINAL_INSCRIBED
+            order.description = 'Ordinal inscribed'
+            orderLog.fatal('Inscribing success...', order.ordinal.reveal)
+          case ORDER_STATUS_ORDINAL_INSCRIBED:
+            const ordinalTx = await getTransaction(order.ordinal.reveal)
+            if (!ordinalTx) {
+              order.order_status = ORDER_STATUS_FAILED
+              order.description = 'Inscribe ordinal transaction not exist'
+              break
+            } else if (!ordinalTx.status.confirmed) {
+              break
+            }
+
+            order.spent_fee += order.ordinal.fees //token_transfer is not defined!!
+            order.spent_fee += await getInscriptionSats(order.ordinal.inscription)
+
+            order.order_status = ORDER_STATUS_CONFIRMED
+            order.description = 'Confirmed'
+            break
+        }
+
+        // order.remain_btc_balance = order.btc_balance - order.spent_fee
+        await orderCollection.updateOne({ _id: order._id }, { $set: order })
+      } catch (error) {
+        order.status = ORDER_STATUS_FAILED
+        order.description = error.toString()
+        orderLog.fatal('UNKOWN FATAL ERROR ***')
+        await orderCollection.updateOne({ _id: order._id }, { $set: order })
+        console.error(error)
+      }
+    }
+  }
+}
+
+const cardinalThread = async () => {
+  while (true) {
+    try {
+      const blockHeight = await bitcoin.blocks.getBlocksTipHeight()
+      if (blockHeight > global.lastBlockHeight) {
+        console.log('---------------------')
+        console.log('---------------------')
+        console.log('------NEW BLOCK-------')
+        console.log('---------------------')
+        console.log('---------------------')
+        global.isAddingCardinal = true
+        logger.debug('New blockHeight', blockHeight)
+        await sleep(10000)
+        runWalletIndex() // ord wallet index
+        const { status, data, error } = addCardinals()
+        if (status === SUCCESS) {
+          logger.fatal('Add cardinal sucess')
+          global.lastBlockHeight = blockHeight
+          global.isAddingCardinal = false
+        } else {
+          logger.error('Add cardinal failed, retrying...')
+        }
+        logger.debug('Waiting for new block ...')
+      }
+    } catch (error) {}
+  }
+}
+
+const getTransaction = async txid => {
   try {
     let tx = null
     let waitTime = 0
@@ -58,8 +234,7 @@ const getTransaction = async (txid) => {
         waitTime++
         await sleep(1000)
         tx = await bitcoin.transactions.getTx({ txid })
-      } catch (error) {
-      }
+      } catch (error) {}
     }
 
     return tx
@@ -68,64 +243,63 @@ const getTransaction = async (txid) => {
   }
 }
 
-const getInscriptionSats = async (inscription) => {
-	try {
-		const parts = inscription.split('i')
-		const txid = parts[0]
-		const vout = parts[1]
+const getInscriptionSats = async inscription => {
+  try {
+    const parts = inscription.split('i')
+    const txid = parts[0]
+    const vout = parts[1]
 
-		const tx = await bitcoin.transactions.getTx({ txid })
+    const tx = await bitcoin.transactions.getTx({ txid })
 
-		if (tx && tx.status.confirmed) {
-			return tx.vout[vout].value
-		}
-	} catch (error) {
-		console.error
-	}
+    if (tx && tx.status.confirmed) {
+      return tx.vout[vout].value
+    }
+  } catch (error) {
+    console.error
+  }
 }
 
 const runWalletIndex = () => {
   try {
-    console.log('wallet indexing...');
+    logger.debug('Wallet indexing ...')
     execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} index`) // It's for ord version below 6.0
-    console.log('  success wallet indexing');
+    logger.debug('Wallet indexing success')
   } catch (error) {
-    console.log('  failed wallet indexing');
+    logger.error('  failed wallet indexing')
   }
 }
 
 const getCardinals = () => {
   try {
-    console.log('getting cardinals...');
+    logger.debug('Getting cardinals ...')
     const cardinals = execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} wallet cardinals`)
-    console.log('  success getting cardinals', jsonParse(cardinals).length);
-    return jsonParse(cardinals)
+    logger.debug('Getting cardinals success')
+    logger.info('Cardinals count=', jsonParse(cardinals).length)
+    return { status: SUCCESS, data: jsonParse(cardinals) }
   } catch (error) {
-    console.log('  failed getting cardinals');
-    return null
+    logger.error('Getting cardinals failed getting')
+    return { status: FAILED }
   }
 }
 
-const addCardinals = (blockHeight) => {
-  const cardinals = getCardinals()
+const addCardinals = () => {
+  const { status, data: cardinals, error } = getCardinals()
   if (cardinals != null && cardinals.length < MIN_CARDINAL) {
-    console.log('adding cardinals...', cardinals.length);
+    logger.debug('Adding cardinals ...', cardinals)
     try {
       const addresses = generateAddress(ADDRESS_COUNT)
-      const status = splitUtxo(addresses, AMOUNT_PER_ADDRESS)
-      if (status) {
-        console.log('  success adding cardinals', cardinals.length);
-        global.lastBlockHeight = blockHeight
+      const response = splitUtxo(addresses, AMOUNT_PER_ADDRESS)
+      if (response.status == SUCCESS) {
+        logger.info('Adding cardinals success', cardinals.length)
+      } else {
+        logger.error('Adding cardinals failed:', response.error)
       }
-      else {
-        console.log('  failed adding cardinals');
-      }
+      return response
     } catch (error) {
-      console.log('  failed adding cardinals', error);
+      logger.error('Adding cardinals failed:', error)
+      return { status: FAILED, error: ERROR_UNKNOWN }
     }
-  }
-  else if (cardinals != null && cardinals.length >= MIN_CARDINAL) {
-    global.lastBlockHeight = blockHeight
+  } else if (cardinals != null && cardinals.length >= MIN_CARDINAL) {
   }
 }
 
@@ -133,199 +307,34 @@ const inscribeTextOrdinal = async (text, destination, feeRate) => {
   try {
     const inscriptionPath = `${INSCRIPTION_PATH}/inscription.txt`
     writeFileSync(inscriptionPath, text)
-    console.log('inscribeTextOrdinal', text, destination, feeRate);
     const response = await inscribeOrdinal(inscriptionPath, destination, feeRate)
     return response
   } catch (error) {
     console.error(error)
-    return { status: 'failed', e }
-  }
-}
-
-const orderMain = async () => {
-  const orders = await global.orderCollection.find({ order_status: { $lt: ORDER_STATUS_FAILED } }).toArray()
-  // const orders = [
-  //   {
-  //     txid: '7b83af5c4f3545684e0cdcbf9f24ebfcced9c459266b1c380cwc516393fad5273',
-  //     receiveAddress: 'tb1qu9ud2zct3m4s6ljvwqdk5sumf4vpdqtv4zulpr',
-  //     fee_rate: 4,
-  //     text: 'text to sincrip',
-  //     ordinal_type: 0,
-  //     timestamp: 1689731995272,
-  //     // description: 'ReferenceError: getTransaction is not defined',
-  //     order_status: ORDER_STATUS_ORDINAL_INSCRIBED,
-  //     ordinal: {
-  //       "commit": "188e4fe11d6cd3712b3bb8b2d6eacd45457507b2744133c138ef8b86bfc0181f",
-  //       "inscription": "7b83af5c4f3545684e0cdcbf9f24ebfcced9c459266b1c380cc516393fad5273i0",
-  //       "reveal": "5263b197d060c17d346efafa270f9cd2acb77c86879a7af274419a328482d406",
-  //       "fees": 2556
-  //     }
-  //   }
-  // ]
-  // console.log('orders :>> ', orders);
-  for (const order of orders) {
-    try {
-      switch (order.order_status) {
-        case ORDER_STATUS_ORDERED:
-          let tx = await getTransaction(order.txid)
-
-          if (!tx) {
-            order.order_status = ORDER_STATUS_FAILED
-            order.description = 'Transaction not exist'
-            break
-          } else if (!tx.status.confirmed) {
-            break
-          }
-
-          let validSenderAddress = true
-
-          for (const vin of tx.vin) {
-            if (vin.prevout.scriptpubkey_address !== order.btc_sender_address) {
-              validSenderAddress = false
-              break
-            }
-          }
-
-          if (!validSenderAddress) {
-            order.order_status = ORDER_STATUS_FAILED
-            order.description = 'Invalid sender address'
-            break
-          }
-
-          let btcBalance = 0
-          let validReceiverAddress = false
-
-          for (const vout of tx.vout) {
-            if (vout.scriptpubkey_address === VAULT_ADDRESS) {
-              btcBalance += vout.value
-              validReceiverAddress = true
-            }
-          }
-
-          if (!validReceiverAddress) {
-            order.order_status = ORDER_STATUS_FAILED
-            order.description = 'Invalid receiver address'
-            break
-          }
-
-          order.btc_balance = btcBalance
-          order.spent_fee = 0
-
-          if (order.btc_balance < STATIC_FEE + DYNAMIC_FEE * order.fee_rate) {
-            order.order_status = ORDER_STATUS_FAILED
-            order.description = 'Insufficient BTC balance'
-            break
-          }
-
-          order.order_status = ORDER_STATUS_TRANSACTION_CONFIRMED
-          order.description = 'Transaction confirmed'
-        case ORDER_STATUS_TRANSACTION_CONFIRMED:
-          const response = await inscribeTextOrdinal(
-            order.text,
-            order.receiveAddress,
-            order.fee_rate
-          )
-          console.log('ordinal :>> ', response);
-          if (response.status == 'failed') {
-            // order.order_status = ORDER_STATUS_FAILED
-            order.description = response.error
-            break
-          }
-
-          order.ordinal = response.data
-
-          order.order_status = ORDER_STATUS_ORDINAL_INSCRIBED
-          order.description = 'Ordinal inscribed'
-        case ORDER_STATUS_ORDINAL_INSCRIBED:
-          const ordinalTx = await getTransaction(order.ordinal.reveal)
-          if (!ordinalTx) {
-            order.order_status = ORDER_STATUS_FAILED
-            order.description = 'Inscribe ordinal transaction not exist'
-            break
-          } else if (!ordinalTx.status.confirmed) {
-            break
-          }
-
-          order.spent_fee += order.ordinal.fees//token_transfer is not defined!!
-          order.spent_fee += await getInscriptionSats(order.ordinal.inscription)
-
-          order.order_status = ORDER_STATUS_CONFIRMED
-          order.description = 'Confirmed'
-          break
-      }
-
-      // order.remain_btc_balance = order.btc_balance - order.spent_fee
-      await orderCollection.updateOne({ _id: order._id }, { $set: order })
-    } catch (error) {
-      order.status = ORDER_STATUS_FAILED
-      order.description = error.toString()
-      await orderCollection.updateOne({ _id: order._id }, { $set: order })
-      console.error(error)
-    }
-  }
-}
-
-const main = async () => {
-  try {
-    const blockHeight = await bitcoin.blocks.getBlocksTipHeight()
-    if (blockHeight > global.lastBlockHeight) {
-      console.log('----new blockHeight-----------------------------', blockHeight);
-      runWalletIndex() // ord wallet index
-      // addCardinals(blockHeight)
-      await orderMain()
-    }
-  } catch (error) {
-
-  }
-}
-
-const init = () => {
-  console.log('initializing app...');
-  const cardinals = getCardinals()
-  global.cardinals_count = cardinals.length
-  console.log('cardinals_count=', global.cardinals_count);
-}
-
-async function appThread() {
-  await sleep(1000)
-  // init()
-  while (true) {
-    try {
-      // console.log('-----start----');
-      // console.time('main')
-      await main()
-      // console.timeEnd('main')
-      // console.log('zzz...');
-      await sleep(10000)
-      // console.log('=====end==============================');
-      // console.log('    ');
-    } catch (error) {
-
-    }
+    return { status: FAILED, error }
   }
 }
 
 async function test() {
   try {
     const blockHeight = await bitcoin.blocks.getBlocksTipHeight()
-    console.log('blockHeight :>> ', blockHeight);
+    console.log('blockHeight :>> ', blockHeight)
     const indexRunRet = await execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} index`) // It's for ord version bellow 6.0
-    console.log('indexRunRet :>> ', indexRunRet.toString());
+    console.log('indexRunRet :>> ', indexRunRet.toString())
     // const balance = await execSync(`ord wallet balance`)
     // console.log('balance :>> ', balance);
     const cardinals = execSync(`ord wallet cardinals`)
-    console.log('cardinals :>> ', jsonParse(cardinals).length);
+    console.log('cardinals :>> ', jsonParse(cardinals).length)
     const inscriptionRet = execSync(`ord wallet inscribe --dry-run --fee-rate 5 inscription.txt`)
-    console.log('inscriptionRet :>> ', inscriptionRet.toString());
+    console.log('inscriptionRet :>> ', inscriptionRet.toString())
     // await sleep(1000);
-    console.log('thread end');
-
+    console.log('thread end')
   } catch (error) {
-    console.error("APPTHREAD ERROR=========>", error)
+    console.error('APPTHREAD ERROR=========>', error)
   }
 }
 
 module.exports = {
   appThread,
-  getCardinals
+  getCardinals,
 }

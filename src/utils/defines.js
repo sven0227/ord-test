@@ -9,6 +9,9 @@ const ERROR_INVALID_PARAMTER = 'Invalid parameter'
 const ERROR_INVALID_TXID = 'Invalid txid'
 const ERROR_DUPLICATED_TXID = 'Duplicated txid'
 
+const SUCCESS = 'success'
+const FAILED = 'failed'
+
 module.exports = {
   ORDER_STATUS_ORDERED,
   ORDER_STATUS_TRANSACTION_CONFIRMED,
@@ -19,4 +22,6 @@ module.exports = {
   ERROR_INVALID_PARAMTER,
   ERROR_INVALID_TXID,
   ERROR_DUPLICATED_TXID,
+  SUCCESS,
+  FAILED,
 }

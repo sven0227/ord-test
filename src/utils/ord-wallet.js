@@ -1,18 +1,12 @@
-const {
-  execSync
-} = require('child_process')
+const { execSync } = require('child_process')
 
-const {
-  NETWORK,
-  MAINNET,
-  WALLET_NAME,
-  TEMP_WALLET_NAME,
-  CMD_PREFIX,
-} = require('./config.js');
-const { jsonParse, exeToString } = require('./utils.js');
+const { NETWORK, MAINNET, WALLET_NAME, TEMP_WALLET_NAME, CMD_PREFIX, SUCCESS, FAILED } = require('./config.js')
+const { jsonParse, exeToString } = require('./utils.js')
 
 const NO_CARDINALS_ERROR = 'error: wallet contains no cardinal utxos'
 const DATABASE_LOCK_ERROR = 'error: Database already open. Cannot acquire lock.'
+
+const INSUFFICIENT_FUND_ERROR = 'error code: -6error message:Insufficient funds'
 
 ////////////////////////////////////////////////////////////////
 
@@ -21,22 +15,24 @@ const DATABASE_LOCK_ERROR = 'error: Database already open. Cannot acquire lock.'
 async function inscribeOrdinal(inscriptionPath, destination, feeRate) {
   try {
     // console.log("inscribling =============>", `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`);
-    console.log("inscribling =============>")
+    // console.log("inscribling =============>")
     const cmd = `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`
     const execOut = execSync(cmd)
     const inscribeInfo = jsonParse(execOut)
-    console.log('inscribeInfo :>> ', inscribeInfo);
-    return { status: 'success', data: inscribeInfo }
+    // console.log('inscribeInfo :>> ', inscribeInfo);
+    return { status: SUCCESS, data: inscribeInfo }
   } catch (error) {
     const { status, signal, output, pid, stdout, stderr } = error
-    console.log('-----------inscribling failied', exeToString(stderr));
-    return { status: 'failed', error: exeToString(stderr) }
+    // console.log('-----------inscribling failied', exeToString(stderr));
+    return { status: FAILED, error: exeToString(stderr) }
   }
 }
 
 async function sendOrdinal(inscriptionId, address, feeRate) {
   try {
-    const execOut = execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet send  --fee-rate ${feeRate} ${address} ${inscriptionId}`)
+    const execOut = execSync(
+      `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet send  --fee-rate ${feeRate} ${address} ${inscriptionId}`,
+    )
     const txid = execOut.toString().replace(/\n/g, '')
 
     return txid
@@ -45,12 +41,10 @@ async function sendOrdinal(inscriptionId, address, feeRate) {
   }
 }
 
-
-const string2json = (string) => {
+const string2json = string => {
   try {
     return JSON.parse(string.replace(/\\n/g, ''))
-  } catch (error) {
-  }
+  } catch (error) {}
 }
 
 function generateAddress(addressCount) {
@@ -58,9 +52,9 @@ function generateAddress(addressCount) {
     const addresses = []
     for (let index = 0; index < addressCount; index++) {
       const cmd =
-        NETWORK === MAINNET ?
-          `ord --wallet ${WALLET_NAME} wallet receive` :
-          `ord --${NETWORK} --wallet ${WALLET_NAME} wallet receive`
+        NETWORK === MAINNET
+          ? `ord --wallet ${WALLET_NAME} wallet receive`
+          : `ord --${NETWORK} --wallet ${WALLET_NAME} wallet receive`
       const execOut = execSync(cmd)
       const address = string2json(execOut.toString()).address
 
@@ -83,19 +77,20 @@ function splitUtxo(addresses, amount) {
 
     // console.log(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`);
     const balance = execSync(`bitcoin-cli -chain=${chain} -rpcwallet=temp getbalance`)
-    console.log('temp wallet balance=', jsonParse(balance) * 1e8);
-    const cmd = `bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}' '' '["bc1pnz95rrkg9j64p05vct2lf5hvhmke6d3apkwfsjly28xy6ermystqm7hk4k"]' true '' 'UNSET' 9 true`
-    console.log('cmd :>> ', cmd);
-    const execOut = execSync(`bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}' `)
-    // console.log(execOut.toString())
-    return true
+    console.log('temp wallet balance=', jsonParse(balance) * 1e8, 'sats')
+    console.log('need wallet balance=', addresses.length * amount, 'sats')
+    const cmd = `bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data,)}' '' '["bc1pnz95rrkg9j64p05vct2lf5hvhmke6d3apkwfsjly28xy6ermystqm7hk4k"]' true '' 'UNSET' 9 true`
+    // console.log('cmd :>> ', cmd);
+    const execOut = execSync(
+      `bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`,
+    )
+    console.log('success sendmany', jsonParse(execOut));
+    return { status: SUCCESS, data: execOut.toString() }
   } catch (error) {
-    console.error('  failed sendmany')
-    // console.error(error)
-    return false
+    console.error('  failed sendmany', exeToString(error.stderr) == INSUFFICIENT_FUND_ERROR)
+    return { status: FAILED, error: exeToString(error.stderr) }
   }
 }
-
 
 module.exports = {
   inscribeOrdinal,

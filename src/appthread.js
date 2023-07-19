@@ -346,7 +346,7 @@ const addCardinals = () => {
 
 const inscribeTextOrdinal = async (text, destination, feeRate) => {
   try {
-    const inscriptionPath = `${INSCRIPTION_PATH}/inscription.txt`
+    const inscriptionPath = `${INSCRIPTION_PATH}/inscription_txt.txt`
     writeFileSync(inscriptionPath, text)
     const response = await inscribeOrdinal(inscriptionPath, destination, feeRate)
     return response

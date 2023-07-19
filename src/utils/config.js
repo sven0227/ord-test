@@ -25,6 +25,11 @@ const AMOUNT_PER_ADDRESS =
 
 const INSCRIPTION_PATH = 'inscription'
 
+//mongodb setting
+const MONGODB_URI = 'mongodb://127.0.0.1:3306'
+const DB_NAME = 'ordinals'
+const COLLECTION_NAME = 'order'
+
 module.exports = {
   MAINNET,
   TESTNET,
@@ -37,4 +42,7 @@ module.exports = {
   MIN_CARDINAL,
   ADDRESS_COUNT,
   AMOUNT_PER_ADDRESS,
+  MONGODB_URI,
+	DB_NAME,
+	COLLECTION_NAME,
 }

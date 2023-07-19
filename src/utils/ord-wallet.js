@@ -9,7 +9,10 @@ const {
   TEMP_WALLET_NAME,
   CMD_PREFIX,
 } = require('./config.js');
-const { jsonParse } = require('./utils.js');
+const { jsonParse, exeToString } = require('./utils.js');
+
+const NO_CARDINALS_ERROR = 'error: wallet contains no cardinal utxos'
+const DATABASE_LOCK_ERROR = 'error: Database already open. Cannot acquire lock.'
 
 ////////////////////////////////////////////////////////////////
 
@@ -17,13 +20,17 @@ const { jsonParse } = require('./utils.js');
 
 async function inscribeOrdinal(inscriptionPath, destination, feeRate) {
   try {
-    console.log("inscribling =============>", `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`);
-    const execOut = execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`)
-    const inscribeInfo = JSON.parse(execOut.toString().replace(/\n/g, ''))
+    // console.log("inscribling =============>", `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`);
+    console.log("inscribling =============>")
+    const cmd = `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`
+    const execOut = execSync(cmd)
+    const inscribeInfo = jsonParse(execOut)
     console.log('inscribeInfo :>> ', inscribeInfo);
-    return inscribeInfo
+    return { status: 'success', data: inscribeInfo }
   } catch (error) {
-    console.error(error)
+    const { status, signal, output, pid, stdout, stderr } = error
+    console.log('-----------inscribling failied', exeToString(stderr));
+    return { status: 'failed', error: exeToString(stderr) }
   }
 }
 

@@ -3,12 +3,7 @@ const parser = require('body-parser')
 const cors = require('cors')
 const { getCardinals } = require('./appthread')
 
-const {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	writeFileSync,
-} = require('fs')
+
 
 const {
 	execSync
@@ -23,12 +18,15 @@ const {
 	INSCRIPTION_PATH,
 } = require('./utils/config.js')
 
-const {
-	inscribeOrdinal,
-} = require('./utils/ord-wallet.js')
+
 
 const { sleep, jsonParse } = require('./utils/utils.js')
 const { join } = require('path')
+
+const ORDINAL_TYPE_TEXT = 0
+const ORDINAL_TYPE_BRC20_DEPLOY = 1
+const ORDINAL_TYPE_BRC20_MINT = 2
+const ORDINAL_TYPE_BRC20_TRANSFER = 3
 
 const ERROR_UNKNOWN = 'Unknown error'
 const ERROR_INVALID_PARAMTER = 'Invalid parameter'
@@ -40,18 +38,12 @@ app.use(parser.urlencoded({ extended: false }))
 app.use(parser.json())
 app.use(cors())
 
-const DIR_PATH = `${INSCRIPTION_PATH}`
+const {
+	checkOrder,
+	insertOrder
+} = require('./mongodb')
 
-const inscribeTextOrdinal = async (text, destination, feeRate) => {
-	try {
-		const inscriptionPath = `${DIR_PATH}/inscription.txt`
-		writeFileSync(inscriptionPath, text)
 
-		return await inscribeOrdinal(inscriptionPath, destination, feeRate)
-	} catch (error) {
-		console.error(error)
-	}
-}
 
 app.post('/textinscribe', async function (req, res) {
 	try {
@@ -97,6 +89,31 @@ app.post('/textinscribe', async function (req, res) {
 	}
 })
 
+app.post('/inscribe/text', async function (req, res) {
+	try {
+		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
+		res.setHeader('Access-Control-Allow-Methods', 'POST')
+
+		const order = req.body
+		if (!(await checkOrder(order))
+		) {
+			res.send(JSON.stringify({ status: 'error', description: order.description }))
+			return
+		}
+
+		order.ordinal_type = ORDINAL_TYPE_TEXT
+
+		if (await insertOrder(order)) {
+			res.send(JSON.stringify({ status: 'success', data: order }))
+		} else {
+			res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+		}
+	} catch (error) {
+		console.error(error)
+		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+	}
+})
+
 app.get('/test', async function (req, res) {
 	try {
 		// console.log('/test...........');
@@ -114,6 +131,32 @@ app.get('/test', async function (req, res) {
 	}
 	catch (error) {
 		res.send(JSON.stringify({ status: 'error', description: error }))
+	}
+})
+
+app.get('/getvaultaddress', async function (req, res) {
+	try {
+		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
+		res.setHeader('Access-Control-Allow-Methods', 'GET')
+
+		res.send(JSON.stringify({ status: 'success', data: VAULT_ADDRESS }))
+	} catch (error) {
+		console.error(error)
+		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
+	}
+})
+
+app.post('/getorder', async function (req, res) {
+	try {
+		res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
+		res.setHeader('Access-Control-Allow-Methods', 'POST')
+
+		const orders = await orderCollection.find(req.body).toArray()
+
+		res.send(JSON.stringify({ status: 'success', data: orders }))
+	} catch (error) {
+		console.error(error)
+		res.send(JSON.stringify({ status: 'error', description: ERROR_UNKNOWN }))
 	}
 })
 

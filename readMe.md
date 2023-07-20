@@ -1,3 +1,7 @@
+# installation
+node version > 18
+
+
 # addresses
   temp address = 
     Mainnet : ''

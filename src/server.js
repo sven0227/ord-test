@@ -30,7 +30,7 @@ app.use(cors())
 const { checkOrder, insertOrder } = require('./mongodb')
 const { SUCCESS, FAILED } = require('./utils/defines')
 
-app.post('/textinscribe', async function (req, res) {
+app.post('/instant_textinscribe', async function (req, res) {
   try {
     res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
     res.setHeader('Access-Control-Allow-Methods', 'POST')
@@ -72,7 +72,7 @@ app.post('/textinscribe', async function (req, res) {
   }
 })
 
-app.post('/inscribe/text', async function (req, res) {
+app.post('/textinscribe', async function (req, res) {
   try {
     res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
     res.setHeader('Access-Control-Allow-Methods', 'POST')

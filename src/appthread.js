@@ -8,6 +8,8 @@ const {
   ADDRESS_COUNT,
   AMOUNT_PER_ADDRESS,
   INSCRIPTION_PATH,
+  ORD_WALLET_NAME,
+  TEMP_WALLET_NAME,
 } = require('./utils/config.js')
 
 global.lastBlockHeight = 0
@@ -20,15 +22,7 @@ const WAIT_TIME = 60
 const ORDER_PERIOD = 5 * 1000
 
 // logger config
-const log4js = require('log4js')
-const logger = log4js.getLogger('cardinal')
-const orderLog = log4js.getLogger('order')
-logger.level = 'debug' // Set log level to debug
-orderLog.level = 'debug' // Set log level to debug
-log4js.configure({
-  appenders: { console: { type: 'console', filename: 'cardinal.log' }, file: { type: 'file', filename: 'order.log' } },
-  categories: { default: { appenders: ['console', 'file'], level: 'debug' } },
-})
+const { logger, orderLog } = require('./logger.js')
 
 const { writeFileSync } = require('fs')
 const { inscribeOrdinal } = require('./utils/ord-wallet.js')
@@ -70,8 +64,10 @@ async function appThread() {
 const init = () => {
   console.log('initializing app...')
   const { status, data: cardinals, error } = getCardinals()
-  global.cardinals_count = cardinals.length
-  console.log('cardinals_count=', global.cardinals_count)
+  if (status == SUCCESS) {
+    global.cardinals_count = cardinals.length
+    console.log('cardinals_count=', global.cardinals_count)
+  }
 }
 
 const orderThread = async () => {
@@ -95,7 +91,8 @@ const orderThread = async () => {
         orderLog.info('No orders..., waiting for new orders')
         continue
       }
-      let index = 0
+      let index = 0,
+        isBreaked = false
       const feeRate = await getFeeRate()
       console.log('feeRate', feeRate)
       if (global.cardinals_count == 0) {
@@ -174,13 +171,14 @@ const orderThread = async () => {
               order.feeRate = feeRate
               order.order_status = ORDER_STATUS_ORDINAL_INSCRIBED
               order.description = 'Ordinal inscribed'
-              orderLog.fatal('Inscribing success...txid,reveal', order.txid, order.ordinal.reveal)
+              orderLog.fatal('Inscribing success...txid, reveal, text', order.txid, order.ordinal.reveal, order.text)
               if (global.cardinals_count > 0) global.cardinals_count -= 1
               break
             case ORDER_STATUS_ORDINAL_INSCRIBED:
-              if (!global.new_block_detected) continue
-              if (toInscribe > 0) continue
-              if (global.new_order_detected) continue
+              if (!global.new_block_detected || toInscribe > 0 || global.new_order_detected) {
+                isBreaked = true
+                continue
+              }
               orderLog.debug('Checking if inscription confimed', index)
               const ordinalTx = await getTransaction(order.ordinal.reveal)
               if (!ordinalTx) {
@@ -210,9 +208,9 @@ const orderThread = async () => {
           console.error(error)
         }
       }
-      global.new_block_detected = false
+      if (!isBreaked) global.new_block_detected = false
       global.new_order_detected = false
-      console.log('orderthread end...');
+      console.log('orderthread end...')
     } catch (error) {
       orderLog.fatal('OrderThread unexpected error', error)
     }
@@ -224,30 +222,70 @@ const cardinalThread = async () => {
     try {
       const blockHeight = await bitcoin.blocks.getBlocksTipHeight()
       console.log('currentBlockHeight', blockHeight, global.lastBlockHeight)
-      await sleep(10000)
       if (blockHeight > global.lastBlockHeight) {
-        console.log('---------------------')
-        console.log('---------------------')
-        console.log('------NEW BLOCK-------')
-        console.log('---------------------')
-        console.log('---------------------')
+        console.log('------------------------------------------')
+        console.log('------NEW BLOCK---------------------------')
+        console.log('------------------------------------------')
         global.new_block_detected = true
         logger.debug('New blockHeight', blockHeight)
         runWalletIndex() // ord wallet index
-        const { status, data, error } = addCardinals()
-        if (status === SUCCESS) {
-          logger.fatal('Add cardinal success')
+        const { status: getStatus, data: cardinals, error } = getCardinals()
+        console.log(process.env.ADD_CARDINAL_ENABLE == 'false')
+        if (process.env.ADD_CARDINAL_ENABLE == 'false') {
+          logger.debug('ADD_CARDINAL is disabled')
           global.lastBlockHeight = blockHeight
-          global.isAddingCardinal = false
-        } else {
-          logger.error('Add cardinal failed, retrying...')
+          continue
         }
-        logger.debug('Waiting for new block ...')
+        if (getStatus === SUCCESS && cardinals.length < MIN_CARDINAL) {
+          logger.debug('Adding cardinals ...', cardinals.length, MIN_CARDINAL)
+          global.isAddingCardinal = true
+          global.cardinals_count = cardinals.length
+          const { status: addStatus, data, error } = addCardinals()
+          if (addStatus === SUCCESS) {
+            logger.fatal('Add cardinal success')
+            global.lastBlockHeight = blockHeight
+            global.isAddingCardinal = false
+          } else {
+            logger.error('Add cardinal failed, retrying...')
+          }
+          logger.debug('Waiting for new block ...')
+        } else if (getStatus === SUCCESS && cardinals.length >= MIN_CARDINAL) {
+          global.isAddingCardinal = false
+          global.lastBlockHeight = blockHeight
+          logger.debug('Enough cardinals, waiting for new block ...')
+        }
       }
+      await sleep(10000)
     } catch (error) {
       logger.error('Cardinals thread unexpected error', error)
     }
   }
+}
+
+const addCardinals = () => {
+  // const { status, data: cardinals, error } = getCardinals()
+  // if (status === SUCCESS && cardinals.length < MIN_CARDINAL) {
+  //   logger.debug('Adding cardinals ...', cardinals)
+  //   global.isAddingCardinal = true
+  //   global.cardinals_count = cardinals.length
+  try {
+    const addresses = generateAddress(ADDRESS_COUNT)
+    const response = splitUtxo(addresses, AMOUNT_PER_ADDRESS)
+    if (response.status == SUCCESS) {
+      logger.info('Adding cardinals success (count, amount)', ADDRESS_COUNT, AMOUNT_PER_ADDRESS)
+    } else {
+      logger.error('Adding cardinals failed:', response.error)
+    }
+    return response
+  } catch (error) {
+    logger.error('Adding cardinals failed:', error)
+    return { status: FAILED, error: ERROR_UNKNOWN }
+  }
+  // } else if (status === SUCCESS && cardinals.length >= MIN_CARDINAL) {
+  //   global.cardinals_count = cardinals.length
+  //   return { status: SUCCESS }
+  // }
+  // return { status: FAILED }
 }
 
 const getFeeRate = async () => {
@@ -299,7 +337,7 @@ const getInscriptionSats = async inscription => {
 const runWalletIndex = () => {
   try {
     logger.debug('Wallet indexing ...')
-    execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} index`) // It's for ord version below 6.0
+    execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${ORD_WALLET_NAME} index`) // It's for ord version below 6.0
     logger.debug('Wallet indexing success')
   } catch (error) {
     logger.error('  failed wallet indexing')
@@ -309,38 +347,13 @@ const runWalletIndex = () => {
 const getCardinals = () => {
   try {
     logger.debug('Getting cardinals ...')
-    const cardinals = execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} wallet cardinals`)
+    const cardinals = execSync(`ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${ORD_WALLET_NAME} wallet cardinals`)
     logger.debug('Getting cardinals success')
     logger.info('Cardinals count=', jsonParse(cardinals).length)
     return { status: SUCCESS, data: jsonParse(cardinals) }
   } catch (error) {
-    logger.error('Getting cardinals failed getting')
+    logger.error('Getting cardinals failed')
     return { status: FAILED }
-  }
-}
-
-const addCardinals = () => {
-  const { status, data: cardinals, error } = getCardinals()
-  if (status === SUCCESS && cardinals.length < MIN_CARDINAL) {
-    logger.debug('Adding cardinals ...', cardinals)
-    global.isAddingCardinal = true
-    global.cardinals_count = cardinals.length
-    try {
-      const addresses = generateAddress(ADDRESS_COUNT)
-      const response = splitUtxo(addresses, AMOUNT_PER_ADDRESS)
-      if (response.status == SUCCESS) {
-        logger.info('Adding cardinals success', cardinals.length)
-      } else {
-        logger.error('Adding cardinals failed:', response.error)
-      }
-      return response
-    } catch (error) {
-      logger.error('Adding cardinals failed:', error)
-      return { status: FAILED, error: ERROR_UNKNOWN }
-    }
-  } else if (status === SUCCESS && cardinals.length >= MIN_CARDINAL) {
-    global.cardinals_count = cardinals.length
-    return { status: SUCCESS }
   }
 }
 

@@ -2,7 +2,8 @@ const TESTNET = 'testnet'
 const MAINNET = 'mainnet'
 const NETWORK = process.env.NETWORK
 
-const WALLET_NAME = 'ord'
+const ORD_WALLET_NAME = process.env.ORD_WALLET_NAME
+const ORD_WALLET_ADDRESS = process.env.ORD_WALLET_ADDRESS
 const TEMP_WALLET_NAME = process.env.TEMP_WALLET_NAME
 
 const CMD_PREFIX = ''
@@ -20,13 +21,14 @@ const INSCRIPTION_PATH = 'inscription'
 //mongodb setting
 const MONGODB_URI = `mongodb://${process.env.MONGODB_USERNAME}:${process.env.MONGODB_PASSWORD}@127.0.0.1:3306/?authSource=admin&readPreference=primary&appname=MongoDB%20Compass&ssl=false`
 const DB_NAME = 'ordinals'
-const COLLECTION_NAME = 'order'
+const COLLECTION_NAME = 'order_' + NETWORK
 
 module.exports = {
   MAINNET,
   TESTNET,
   NETWORK,
-  WALLET_NAME,
+  ORD_WALLET_NAME,
+  ORD_WALLET_ADDRESS,
   TEMP_WALLET_NAME,
   CMD_PREFIX,
   FRONT_SERVER,

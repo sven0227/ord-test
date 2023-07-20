@@ -3,7 +3,7 @@ const parser = require('body-parser')
 const cors = require('cors')
 const { getCardinals } = require('./appthread')
 
-const { MAINNET, TESTNET, NETWORK, CMD_PREFIX, FRONT_SERVER, INSCRIPTION_PATH } = require('./utils/config.js')
+const { MAINNET, TESTNET, NETWORK, CMD_PREFIX, FRONT_SERVER, ORD_WALLET_ADDRESS } = require('./utils/config.js')
 
 const log4js = require('log4js')
 const logger = log4js.getLogger('API-' + NETWORK)
@@ -123,7 +123,7 @@ app.get('/getvaultaddress', async function (req, res) {
     res.setHeader('Access-Control-Allow-Origin', FRONT_SERVER)
     res.setHeader('Access-Control-Allow-Methods', 'GET')
 
-    res.send(JSON.stringify({ status: SUCCESS, data: VAULT_ADDRESS }))
+    res.send(JSON.stringify({ status: SUCCESS, data:  ORD_WALLET_ADDRESS}))
   } catch (error) {
     console.error(error)
     res.send(JSON.stringify({ status: FAILED, description: ERROR_UNKNOWN }))

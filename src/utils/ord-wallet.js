@@ -1,7 +1,9 @@
 const { execSync } = require('child_process')
 
-const { NETWORK, MAINNET, WALLET_NAME, TEMP_WALLET_NAME, CMD_PREFIX, SUCCESS, FAILED } = require('./config.js')
+const { NETWORK, MAINNET, ORD_WALLET_NAME, TEMP_WALLET_NAME, CMD_PREFIX } = require('./config.js')
+const { SUCCESS, FAILED } = require('./defines.js')
 const { jsonParse, exeToString } = require('./utils.js')
+const { logger, orderLog } = require('../logger.js')
 
 const NO_CARDINALS_ERROR = 'error: wallet contains no cardinal utxos'
 const DATABASE_LOCK_ERROR = 'error: Database already open. Cannot acquire lock.'
@@ -16,7 +18,7 @@ async function inscribeOrdinal(inscriptionPath, destination, feeRate) {
   try {
     // console.log("inscribling =============>", `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`);
     // console.log("inscribling =============>")
-    const cmd = `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`
+    const cmd = `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${ORD_WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`
     const execOut = execSync(cmd)
     const inscribeInfo = jsonParse(execOut)
     // console.log('inscribeInfo :>> ', inscribeInfo);
@@ -31,7 +33,7 @@ async function inscribeOrdinal(inscriptionPath, destination, feeRate) {
 async function sendOrdinal(inscriptionId, address, feeRate) {
   try {
     const execOut = execSync(
-      `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet send  --fee-rate ${feeRate} ${address} ${inscriptionId}`,
+      `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${ORD_WALLET_NAME} wallet send  --fee-rate ${feeRate} ${address} ${inscriptionId}`,
     )
     const txid = execOut.toString().replace(/\n/g, '')
 
@@ -53,8 +55,8 @@ function generateAddress(addressCount) {
     for (let index = 0; index < addressCount; index++) {
       const cmd =
         NETWORK === MAINNET
-          ? `ord --wallet ${WALLET_NAME} wallet receive`
-          : `ord --${NETWORK} --wallet ${WALLET_NAME} wallet receive`
+          ? `ord --wallet ${ORD_WALLET_NAME} wallet receive`
+          : `ord --${NETWORK} --wallet ${ORD_WALLET_NAME} wallet receive`
       const execOut = execSync(cmd)
       const address = string2json(execOut.toString()).address
 
@@ -76,18 +78,17 @@ function splitUtxo(addresses, amount) {
     }
 
     // console.log(`bitcoin-cli -chain=${NETWORK === 'mainnet' ? 'main' : 'test'} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`);
-    const balance = execSync(`bitcoin-cli -chain=${chain} -rpcwallet=temp getbalance`)
+    const balance = execSync(`bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} getbalance`)
     console.log('temp wallet balance=', jsonParse(balance) * 1e8, 'sats')
     console.log('need wallet balance=', addresses.length * amount, 'sats')
-    const cmd = `bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data,)}' '' '["bc1pnz95rrkg9j64p05vct2lf5hvhmke6d3apkwfsjly28xy6ermystqm7hk4k"]' true '' 'UNSET' 9 true`
-    // console.log('cmd :>> ', cmd);
-    const execOut = execSync(
-      `bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`,
-    )
-    console.log('success sendmany', jsonParse(execOut));
+    logger.info('temp wallet balance=', jsonParse(balance) * 1e8, 'sats', ORD_WALLET_NAME, TEMP_WALLET_NAME)
+    const cmd = `bitcoin-cli -chain=${chain} -rpcwallet=${TEMP_WALLET_NAME} sendmany '' '${JSON.stringify(data)}'`
+    logger.info('excuting sendmany===========>', cmd)
+    const execOut = execSync(cmd)
+    logger.info('success sendmany')
     return { status: SUCCESS, data: execOut.toString() }
   } catch (error) {
-    console.error('  failed sendmany', exeToString(error.stderr) == INSUFFICIENT_FUND_ERROR)
+    logger.error('  failed sendmany', exeToString(error))
     return { status: FAILED, error: exeToString(error.stderr) }
   }
 }

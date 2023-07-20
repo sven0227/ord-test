@@ -37,10 +37,10 @@ root@135-181-213-142 /ord-test # ord --wallet temp wallet create
   "mnemonic": "copy visit crack egg jeans setup certain anger canoe dilemma behave weekend",
   "passphrase": ""
 }
-## temp wallet
+## temp wallet for send many
 root@135-181-213-142 /ord-test # ord --wallet temp wallet receive
 {
-  "address": "bc1pnz95rrkg9j64p05vct2lf5hvhmke6d3apkwfsjly28xy6ermystqm7hk4k"
+  "address": "bc1pyzcr3wv7paquxefr092sjn77tt7cmnu76xgeg9hujw50337a0lxsn23kar"
 }
 ## temp wallet testnet create
 root@135-181-213-142 /ord-test # ord --testnet --wallet temp wallet create

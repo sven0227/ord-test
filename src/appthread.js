@@ -81,11 +81,8 @@ const orderThread = async () => {
       console.log('=== NEW ORDER =', toInscribe, orders.length)
       console.log('=====================')
       console.log('=====================')
-      if (global.isAddingCardinal) {
-        orderLog.info('Waiting for cardinals added...')
-        continue
-      }
-      if (orders.length > 0) {
+      console.log('global.new_block_detected :>> ', global.new_block_detected);
+      if (toInscribe > 0 || (global.new_block_detected && orders.length - toInscribe > 0)) {
         orderLog.info('OrderThread Start, toInscribe, total', toInscribe, orders.length)
       } else {
         orderLog.info('No orders..., waiting for new orders')
@@ -101,6 +98,11 @@ const orderThread = async () => {
       }
       for (const order of orders) {
         index++
+        if (global.cardinals_count == 0) {
+          isBreaked = true
+          orderLog.info('Waiting for cardinals added...')
+          break
+        }
         try {
           switch (order.order_status) {
             case ORDER_STATUS_ORDERED:
@@ -207,6 +209,7 @@ const orderThread = async () => {
           await orderCollection.updateOne({ _id: order._id }, { $set: order })
           console.error(error)
         }
+        await sleep(300)
       }
       if (!isBreaked) global.new_block_detected = false
       global.new_order_detected = false
@@ -222,15 +225,16 @@ const cardinalThread = async () => {
     try {
       const blockHeight = await bitcoin.blocks.getBlocksTipHeight()
       console.log('currentBlockHeight', blockHeight, global.lastBlockHeight)
+      await sleep(10000)
       if (blockHeight > global.lastBlockHeight) {
         console.log('------------------------------------------')
         console.log('------NEW BLOCK---------------------------')
         console.log('------------------------------------------')
         global.new_block_detected = true
+        await sleep(1000)
         logger.debug('New blockHeight', blockHeight)
         runWalletIndex() // ord wallet index
         const { status: getStatus, data: cardinals, error } = getCardinals()
-        console.log(process.env.ADD_CARDINAL_ENABLE == 'false')
         if (process.env.ADD_CARDINAL_ENABLE == 'false') {
           logger.debug('ADD_CARDINAL is disabled')
           global.lastBlockHeight = blockHeight
@@ -255,7 +259,6 @@ const cardinalThread = async () => {
           logger.debug('Enough cardinals, waiting for new block ...')
         }
       }
-      await sleep(10000)
     } catch (error) {
       logger.error('Cardinals thread unexpected error', error)
     }
@@ -263,11 +266,6 @@ const cardinalThread = async () => {
 }
 
 const addCardinals = () => {
-  // const { status, data: cardinals, error } = getCardinals()
-  // if (status === SUCCESS && cardinals.length < MIN_CARDINAL) {
-  //   logger.debug('Adding cardinals ...', cardinals)
-  //   global.isAddingCardinal = true
-  //   global.cardinals_count = cardinals.length
   try {
     const addresses = generateAddress(ADDRESS_COUNT)
     const response = splitUtxo(addresses, AMOUNT_PER_ADDRESS)
@@ -281,11 +279,6 @@ const addCardinals = () => {
     logger.error('Adding cardinals failed:', error)
     return { status: FAILED, error: ERROR_UNKNOWN }
   }
-  // } else if (status === SUCCESS && cardinals.length >= MIN_CARDINAL) {
-  //   global.cardinals_count = cardinals.length
-  //   return { status: SUCCESS }
-  // }
-  // return { status: FAILED }
 }
 
 const getFeeRate = async () => {

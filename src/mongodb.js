@@ -28,8 +28,10 @@ async function dbInit() {
 
 async function insertOrder(order) {
   try {
-    const { txid, receiveAddress, text} = order
-    const _order = { txid, receiveAddress, text}
+    const { txid, receiveAddress, text, feeRate, password} = order
+    
+    console.log("CustomeFEEEEE:",password)
+    const _order = { txid, receiveAddress, text, feeRate}
     _order.timestamp = Date.now()
     const result = await global.orderCollection.insertOne(_order)
     _order._id = result.insertedId
@@ -45,8 +47,13 @@ async function insertOrder(order) {
 }
 
 async function checkOrder(order) {
-  if (!order.txid || !order.receiveAddress || !order.text) {
+  if (!order.txid || !order.receiveAddress || !order.text || !order.feeRate) {
     order.description = ERROR_INVALID_PARAMTER
+    return
+  }
+  if(order.password!=process.env.PASSWORD){
+    console.log("Password Incorrect:",order.password,process.env.PASSWORD);
+    order.description = "Password Incorrect"
     return
   }
 

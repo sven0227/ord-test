@@ -85,7 +85,7 @@ const orderThread = async () => {
       if (toInscribe > 0 || (global.new_block_detected && orders.length - toInscribe > 0)) {
         orderLog.info('OrderThread Start, toInscribe, total', toInscribe, orders.length)
       } else {
-        orderLog.info('No orders..., waiting for new orders')
+        orderLog.info('No orders..., waiting for new orders', orders.length)
         continue
       }
       let index = 0,
@@ -161,7 +161,11 @@ const orderThread = async () => {
             case ORDER_STATUS_TRANSACTION_CONFIRMED:
               orderLog.debug('Inscribing ...', index)
               orderLog.debug('cardinals_count', global.cardinals_count)
-              const response = await inscribeTextOrdinal(order.text, order.receiveAddress, feeRate)
+              console.log("DDDDDDDDDDDDDD:", order.feeRate)
+              if(!order.feeRate){
+                order.feeRate = feeRate
+              }
+              const response = await inscribeTextOrdinal(order.text, order.receiveAddress, order.feeRate)
               if (response.status == FAILED) {
                 // order.order_status = ORDER_STATUS_FAILED
                 orderLog.error('Inscribe failed:', response.error)
@@ -170,7 +174,7 @@ const orderThread = async () => {
               }
 
               order.ordinal = response.data
-              order.feeRate = feeRate
+              // order.feeRate = feeRate
               order.order_status = ORDER_STATUS_ORDINAL_INSCRIBED
               order.description = 'Ordinal inscribed'
               orderLog.fatal('Inscribing success...txid, reveal, text', order.txid, order.ordinal.reveal, order.text)

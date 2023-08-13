@@ -16,6 +16,7 @@ const INSUFFICIENT_FUND_ERROR = 'error code: -6error message:Insufficient funds'
 
 async function inscribeOrdinal(inscriptionPath, destination, feeRate) {
   try {
+    console.log("FFFFFFFFFFFFFFFFFFFF: ", feeRate)
     // console.log("inscribling =============>", `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`);
     // console.log("inscribling =============>")
     const cmd = `ord ${CMD_PREFIX} --chain ${NETWORK} --wallet ${ORD_WALLET_NAME} wallet inscribe --destination ${destination} --fee-rate ${feeRate} ${inscriptionPath}`

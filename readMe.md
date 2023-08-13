@@ -57,3 +57,7 @@ root@135-181-213-142 /ord-test # ord --testnet --wallet temp wallet receive
 {
   "address": "tb1pxxfcu0puxfqnf6aart0ve3gsj93fy6lumcy5uyc7ycvr2029gces4sgx80"
 }
+
+## run on the folder where node_modules are placed
+nvm use 18
+pm2 start "npm run start"
